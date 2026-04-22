@@ -48,11 +48,13 @@ export class OrdersController {
     return this.ordersService.findByIdPublic(id);
   }
 
-  @Public()
   @Post('search')
   @ApiOperation({ summary: 'Search orders by phone number' })
-  async searchOrders(@Body() dto: CheckPhoneDto) {
-    return this.ordersService.searchOrdersByPhone(dto.phone);
+  async searchOrders(
+    @Body() dto: CheckPhoneDto,
+    @CurrentUser() user: JwtPayload
+  ) {
+    return this.ordersService.searchOrdersByPhone(dto.phone, user);
   }
 
   @Post()

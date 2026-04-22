@@ -15,6 +15,9 @@ import {
   SendOtpDto,
   VerifyOtpDto,
   AdminLoginDto,
+  ClientLoginDto,
+  SetPinDto,
+  RefreshTokenDto,
 } from './dto/auth.dto';
 import { JwtPayload } from '@/common/interfaces/jwt-payload.interface';
 
@@ -183,6 +186,109 @@ export class AuthService {
       throw new BadRequestException(
         ErrorCode.INTERNAL_SERVER_ERROR,
         'Erreur de vérification',
+      );
+    }
+  }
+  async clientLogin(dto: ClientLoginDto): Promise<TokenResponse> {
+    const normalizedPhone = this.normalizePhone(dto.phone);
+    logger.log(`Tentative de connexion client: ${normalizedPhone}`);
+
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { phone: normalizedPhone },
+      });
+
+      if (!user) {
+        throw new BadRequestException(
+          ErrorCode.AUTH_INVALID_CREDENTIALS,
+          'Numéro inconnu. Pour créer un compte, passez votre première commande.',
+        );
+      }
+
+      if (!user.password) {
+        throw new BadRequestException(
+          ErrorCode.AUTH_INVALID_CREDENTIALS,
+          'Aucun code PIN défini pour ce compte. Passez votre première commande pour l\'initialiser.',
+        );
+      }
+
+      const isPinValid = await bcrypt.compare(dto.pin, user.password);
+
+      if (!isPinValid) {
+        throw new UnauthorizedException('Code PIN incorrect');
+      }
+
+      const tokens = await this.issueTokens({
+        sub: user.id,
+        phone: user.phone,
+        role: user.role as 'CLIENT' | 'ADMIN',
+      });
+
+      logger.log(`Connexion client réussie: ${normalizedPhone}`);
+
+      return tokens;
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof UnauthorizedException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+      logger.error('Erreur lors de la connexion client:', error);
+      throw new BadRequestException(
+        ErrorCode.INTERNAL_SERVER_ERROR,
+        'Erreur de connexion',
+      );
+    }
+  }
+
+  async setPin(dto: SetPinDto): Promise<TokenResponse> {
+    const normalizedPhone = this.normalizePhone(dto.phone);
+    logger.log(`Définition du PIN pour: ${normalizedPhone}`);
+
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { phone: normalizedPhone },
+      });
+
+      if (!user) {
+        throw new NotFoundException('Utilisateur non trouvé');
+      }
+
+      // On ne permet de définir le PIN que s'il n'existe pas encore ou via un flux sécurisé
+      // Pour l'instant, on permet l'initialisation si password est null
+      if (user.password) {
+        throw new BadRequestException(
+          ErrorCode.INVALID_INPUT,
+          'Un code PIN est déjà défini pour ce compte.',
+        );
+      }
+
+      const hashedPin = await bcrypt.hash(dto.pin, 10);
+
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { password: hashedPin },
+      });
+
+      const tokens = await this.issueTokens({
+        sub: user.id,
+        phone: user.phone,
+        role: user.role as 'CLIENT' | 'ADMIN',
+      });
+
+      logger.log(`Code PIN défini et session initialisée pour ${normalizedPhone}`);
+
+      return tokens;
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      logger.error('Erreur lors de la définition du PIN:', error);
+      throw new BadRequestException(
+        ErrorCode.INTERNAL_SERVER_ERROR,
+        'Erreur technique lors de la définition du PIN',
       );
     }
   }

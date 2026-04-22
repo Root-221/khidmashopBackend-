@@ -16,6 +16,8 @@ import {
   SendOtpDto,
   VerifyOtpDto,
   AdminLoginDto,
+  ClientLoginDto,
+  SetPinDto,
   RefreshTokenDto,
 } from './dto/auth.dto';
 import { Public } from '@/core/decorators/public.decorator';
@@ -122,6 +124,46 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const tokens = await this.authService.adminLogin(dto);
+    attachAuthCookies(res, tokens.accessToken, tokens.refreshToken, tokens.role);
+    return {
+      accessToken: tokens.accessToken,
+      role: tokens.role,
+    };
+  }
+
+  @Public()
+  @Post('login-client')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Client login with phone and 4-digit PIN' })
+  @ApiResponse({
+    status: 200,
+    description: 'Connexion client réussie',
+  })
+  async loginClient(
+    @Body() dto: ClientLoginDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const tokens = await this.authService.clientLogin(dto);
+    attachAuthCookies(res, tokens.accessToken, tokens.refreshToken, tokens.role);
+    return {
+      accessToken: tokens.accessToken,
+      role: tokens.role,
+    };
+  }
+
+  @Public() // Accessible for initial setup after order
+  @Post('set-pin')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Set initial 4-digit PIN for client account' })
+  @ApiResponse({
+    status: 200,
+    description: 'PIN configuré avec succès',
+  })
+  async setPin(
+    @Body() dto: SetPinDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const tokens = await this.authService.setPin(dto);
     attachAuthCookies(res, tokens.accessToken, tokens.refreshToken, tokens.role);
     return {
       accessToken: tokens.accessToken,

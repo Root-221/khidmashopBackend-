@@ -83,3 +83,37 @@ export class RefreshTokenDto {
   @IsString()
   refreshToken?: string;
 }
+
+export class ClientLoginDto {
+  @ApiProperty({
+    description: 'Numéro de téléphone',
+    example: '778627052',
+  })
+  @IsString()
+  phone: string;
+
+  @ApiProperty({
+    description: 'Code PIN à 4 chiffres',
+    example: '1234',
+  })
+  @IsString()
+  @Matches(/^[0-9]{4}$/, { message: 'Le code PIN doit contenir exactement 4 chiffres' })
+  pin: string;
+}
+
+export class SetPinDto {
+  @ApiProperty({
+    description: 'Numéro de téléphone pour identification',
+    example: '771112233',
+  })
+  @IsString()
+  phone: string;
+
+  @ApiProperty({
+    description: 'Code PIN à 4 chiffres',
+    example: '1234',
+  })
+  @IsString()
+  @Matches(/^[0-9]{4}$/, { message: 'Le code PIN doit contenir exactement 4 chiffres' })
+  pin: string;
+}

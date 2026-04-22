@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { User } from '@prisma/client';
 import { PrismaService } from '@/common/services/prisma.service';
+import { SmsService } from '../sms/sms.service';
 import { CreateOrderDto, UpdateOrderStatusDto, CreateGuestOrderDto } from './dto/order.dto';
 import {
   NotFoundException,
@@ -14,7 +15,10 @@ const logger = getLogger('OrdersService');
 
 @Injectable()
 export class OrdersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private smsService: SmsService
+  ) {}
 
   async findAll(user?: JwtPayload, includeAll: boolean = false) {
     logger.log('Fetching orders');
@@ -216,6 +220,9 @@ export class OrdersService {
 
     logger.log(`Commande créée: ${order.id}`);
 
+    // Notification Admin
+    this.notifyAdminNewOrder(order);
+
     return order;
   }
 
@@ -330,10 +337,19 @@ export class OrdersService {
     return { total, pending, confirmed, delivered };
   }
 
-  async searchOrdersByPhone(phone: string) {
-    logger.log(`Searching orders by phone: ${phone}`);
+  async searchOrdersByPhone(phone: string, user: JwtPayload) {
+    logger.log(`Searching orders by phone: ${phone} (requested by ${user.phone})`);
     
     const normalizedPhone = this.normalizePhone(phone);
+    const requesterPhone = this.normalizePhone(user.phone);
+
+    // Security check: Only admins can search for other people's phones
+    if (user.role !== 'ADMIN' && normalizedPhone !== requesterPhone) {
+      throw new BadRequestException(
+        ErrorCode.AUTH_FORBIDDEN,
+        'Vous ne pouvez consulter que vos propres commandes',
+      );
+    }
     
     const orders = await this.prisma.order.findMany({
       where: { phone: normalizedPhone },
@@ -349,15 +365,24 @@ export class OrdersService {
   }
 
   async checkPhoneExists(phone: string) {
-    logger.log(`Checking phone: ${phone}`);
+    const normalizedPhone = this.normalizePhone(phone);
+    logger.log(`Checking phone: ${normalizedPhone}`);
     
     const user = await this.prisma.user.findUnique({
-      where: { phone },
-      select: { id: true, name: true, address: true },
+      where: { phone: normalizedPhone },
+      select: { id: true, name: true, address: true, password: true },
     });
 
     if (user) {
-      return { exists: true, user: { id: user.id, name: user.name, address: user.address ?? undefined } };
+      return { 
+        exists: true, 
+        user: { 
+          id: user.id, 
+          name: user.name, 
+          address: user.address ?? undefined,
+          hasPin: !!user.password
+        } 
+      };
     }
 
     return { exists: false };
@@ -466,7 +491,26 @@ export class OrdersService {
 
     logger.log(`Guest order created: ${order.id}`);
 
+    // Notification Admin
+    this.notifyAdminNewOrder(order);
+
     return order;
+  }
+
+  private async notifyAdminNewOrder(order: any) {
+    const adminPhone = process.env.ADMIN_PHONE_NUMBER;
+    if (!adminPhone) {
+      logger.warn('ADMIN_PHONE_NUMBER non configuré. Notification admin ignorée.');
+      return;
+    }
+
+    const message = `🛍️ Nouvelle commande sur KhidmaShop !\n👤 Client: ${order.customerName}\n💰 Total: ${order.total} FCFA\n📱 Tél: ${order.phone}\n🆔 Commande: ${order.id}`;
+
+    try {
+      await this.smsService.sendSms(adminPhone, message);
+    } catch (error) {
+      logger.error(`Erreur notification admin pour la commande ${order.id}:`, error);
+    }
   }
 
   private normalizePhone(phone: string): string {
