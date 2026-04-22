@@ -6,7 +6,7 @@ import { CloudinaryService } from '@/common/services/cloudinary.service';
 
 @Module({
   controllers: [CategoriesController],
-  providers: [CategoriesService, PrismaService, CloudinaryService],
+  providers: [CategoriesService],
   exports: [CategoriesService],
 })
 export class CategoriesModule {}

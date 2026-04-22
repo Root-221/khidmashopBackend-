@@ -3,10 +3,8 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 
-import { PrismaService } from './common/services/prisma.service';
+import { CommonModule } from './common/common.module';
 import { JwtGuard } from './common/guards/jwt.guard';
-import { CloudinaryService } from './common/services/cloudinary.service';
-import { RefreshTokenService } from './common/services/refresh-token.service';
 
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
@@ -21,6 +19,7 @@ import { SmsModule } from './modules/sms/sms.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    CommonModule,
     JwtModule.register({
       global: true,
       secret: process.env.JWT_SECRET || 'your-secret-key',
@@ -34,9 +33,6 @@ import { SmsModule } from './modules/sms/sms.module';
     SmsModule,
   ],
   providers: [
-    PrismaService,
-    CloudinaryService,
-    RefreshTokenService,
     {
       provide: APP_GUARD,
       useClass: JwtGuard,

@@ -13,7 +13,7 @@ import { RefreshTokenService } from '@/common/services/refresh-token.service';
     SmsModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, PrismaService, RefreshTokenService],
+  providers: [AuthService, JwtStrategy],
   exports: [AuthService],
 })
 export class AuthModule {}
