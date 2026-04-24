@@ -177,15 +177,24 @@ export class ProductsService {
       return { message: 'Produit supprimé avec succès' };
     } catch (error: any) {
       logger.error(`Failed to delete product ${id}`, error.message);
-      if (error.code === 'P2003') {
-        throw new BadRequestException(
-          ErrorCode.PRODUCT_HAS_ORDERS,
-          'Ce produit ne peut pas être supprimé car il est lié à des commandes existantes',
-        );
+      
+      // P2003 is Foreign Key constraint violation
+      if (error.code === 'P2003' || error.message?.includes('foreign key constraint')) {
+        logger.warn(`Product ${id} has dependencies, deactivating instead of deleting`);
+        await this.prisma.product.update({
+          where: { id },
+          data: { active: false },
+        });
+        return { 
+          message: 'Le produit a été désactivé car il est lié à des commandes existantes',
+          deactivated: true 
+        };
       }
+
       if (error.code === 'P2025') {
         throw new NotFoundException('Product');
       }
+      
       throw new BadRequestException(
         ErrorCode.DATABASE_ERROR,
         'Impossible de supprimer ce produit',
